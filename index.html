@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Combined Balance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #edf0f3;
+    --ink: #15212c;
+    --muted: #5d6b78;
+    --line: #d3dae1;
+    --pos: #0f6b5c;
+    --neg: #b0432b;
+    --btn-bg: #15212c;
+    --btn-ink: #ffffff;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161c;
+      --ink: #e8edf1;
+      --muted: #93a1ad;
+      --line: #26323d;
+      --pos: #4fc3a8;
+      --neg: #f08a6f;
+      --btn-bg: #e8edf1;
+      --btn-ink: #10161c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    line-height: 1.5;
+    padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0);
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 48px 20px 80px; }
+  .num { font-variant-numeric: tabular-nums; }
+  button {
+    font: inherit; font-weight: 700; cursor: pointer;
+    border: 0; border-radius: 6px; padding: 11px 18px;
+    background: var(--btn-bg); color: var(--btn-ink);
+  }
+  button.quiet {
+    background: transparent; color: var(--muted); font-weight: 500;
+    padding: 6px 0; text-decoration: underline; text-underline-offset: 3px;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  :focus-visible { outline: 3px solid var(--pos); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* Login */
+  #login { max-width: 360px; margin: 18vh auto 0; padding: 0 20px; }
+  #login h1 { font-size: 1.5rem; margin: 0 0 6px; }
+  #login p { color: var(--muted); margin: 0 0 20px; }
+  #login input {
+    width: 100%; font: inherit; padding: 11px 12px; margin-bottom: 12px;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: transparent; color: var(--ink);
+  }
+  #login button { width: 100%; }
+  .error { color: var(--neg); margin: 12px 0 0; min-height: 1.5em; }
+
+  /* Dashboard */
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 36px; }
+  .topbar strong { font-weight: 800; }
+  .label { color: var(--muted); font-size: .95rem; margin: 0; }
+  .total { font-size: clamp(2.6rem, 11vw, 4.5rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; margin: 4px 0 20px; }
+  .total.negative { color: var(--neg); }
+  .split { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--line); }
+  .split span { display: block; height: 100%; }
+  .split .a { background: var(--pos); }
+  .split .o { background: var(--neg); }
+  .legend { display: flex; gap: 28px; margin: 14px 0 0; flex-wrap: wrap; }
+  .legend div p { margin: 0; }
+  .legend .v { font-weight: 700; font-size: 1.15rem; }
+
+  .banks { margin-top: 48px; }
+  .bank { border-top: 1px solid var(--line); padding: 18px 0 8px; }
+  .bank-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .bank-head h2 { font-size: 1.05rem; margin: 0; }
+  .acct { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; }
+  .acct .meta { color: var(--muted); font-size: .9rem; }
+  .acct .amt { font-weight: 700; white-space: nowrap; }
+  .acct .amt.owed { color: var(--neg); }
+  .bank-error { color: var(--neg); margin: 8px 0 12px; }
+  .empty { border-top: 1px solid var(--line); padding: 28px 0; color: var(--muted); }
+  .actions { margin-top: 24px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .stamp { color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<section id="login" hidden>
+  <h1>Combined Balance</h1>
+  <p>Enter your access code. You only need to do this once on this device.</p>
+  <input id="code" type="password" autocomplete="current-password" placeholder="Access code" aria-label="Access code">
+  <button id="unlock">Unlock</button>
+  <p class="error" id="login-error" role="alert"></p>
+</section>
+
+<main id="app" hidden>
+  <div class="topbar">
+    <strong>Combined Balance</strong>
+    <button class="quiet" id="logout">Log out</button>
+  </div>
+
+  <p class="label">Total across all linked accounts</p>
+  <p class="total num" id="net">&nbsp;</p>
+
+  <div class="split" id="split" aria-hidden="true"><span class="a" id="bar-a"></span><span class="o" id="bar-o"></span></div>
+  <div class="legend">
+    <div><p class="label">Cash and investments</p><p class="v num" id="assets">—</p></div>
+    <div><p class="label">Owed on cards and loans</p><p class="v num" id="owed">—</p></div>
+  </div>
+
+  <div class="banks" id="banks"></div>
+
+  <div class="actions">
+    <button id="connect">Connect a bank</button>
+    <button class="quiet" id="refresh">Refresh balances</button>
+    <span class="stamp" id="stamp"></span>
+  </div>
+  <p class="error" id="app-error" role="alert"></p>
+</main>
+
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const money = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+
+function showLogin() { $('#app').hidden = true; $('#login').hidden = false; $('#code').focus(); }
+function showApp() { $('#login').hidden = true; $('#app').hidden = false; }
+
+async function api(path, body) {
+  const r = await fetch('/api/' + path, {
+    method: body ? 'POST' : 'GET',
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && path !== 'login') { showLogin(); throw new Error('Not signed in'); }
+  if (!r.ok) throw new Error(data.error || 'Something went wrong');
+  return data;
+}
+
+/* ---------- Login ---------- */
+async function unlock() {
+  $('#login-error').textContent = '';
+  $('#unlock').disabled = true;
+  try {
+    await api('login', { password: $('#code').value });
+    $('#code').value = '';
+    await start();
+  } catch (e) {
+    $('#login-error').textContent = e.message;
+  } finally {
+    $('#unlock').disabled = false;
+  }
+}
+$('#unlock').addEventListener('click', unlock);
+$('#code').addEventListener('keydown', (e) => { if (e.key === 'Enter') unlock(); });
+$('#logout').addEventListener('click', async () => { await api('logout', {}).catch(() => {}); showLogin(); });
+
+/* ---------- Dashboard ---------- */
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+function render(data) {
+  const { totals, institutions } = data;
+  const net = $('#net');
+  net.textContent = money(totals.net);
+  net.classList.toggle('negative', totals.net < 0);
+  $('#assets').textContent = money(totals.assets);
+  $('#owed').textContent = totals.owed ? '−' + money(totals.owed) : money(0);
+
+  const sum = totals.assets + totals.owed;
+  $('#bar-a').style.width = sum > 0 ? (totals.assets / sum * 100) + '%' : '0';
+  $('#bar-o').style.width = sum > 0 ? (totals.owed / sum * 100) + '%' : '0';
+  $('#stamp').textContent = 'Updated ' + new Date(data.updatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  const wrap = $('#banks');
+  wrap.replaceChildren();
+
+  if (!institutions.length) {
+    wrap.append(el('p', 'empty', 'No banks connected yet. Select Connect a bank to add your first one.'));
+    return;
+  }
+
+  for (const inst of institutions) {
+    const section = el('div', 'bank');
+    const head = el('div', 'bank-head');
+    head.append(el('h2', '', inst.name));
+    const rm = el('button', 'quiet', 'Disconnect');
+    rm.addEventListener('click', () => disconnect(inst));
+    head.append(rm);
+    section.append(head);
+
+    if (inst.error) {
+      const msg = inst.error === 'ITEM_LOGIN_REQUIRED'
+        ? 'This bank needs you to sign in again. Disconnect it, then connect it again.'
+        : 'Could not load this bank (' + inst.error + ').';
+      section.append(el('p', 'bank-error', msg));
+    }
+
+    for (const a of inst.accounts) {
+      const row = el('div', 'acct');
+      const left = el('div');
+      left.append(el('div', '', a.name));
+      left.append(el('div', 'meta', [a.subtype, a.mask ? '…' + a.mask : ''].filter(Boolean).join(' ')));
+      const isDebt = a.type === 'credit' || a.type === 'loan';
+      const amt = el('div', 'amt num' + (isDebt ? ' owed' : ''), (isDebt ? '−' : '') + money(a.current || 0));
+      row.append(left, amt);
+      section.append(row);
+    }
+    wrap.append(section);
+  }
+}
+
+async function load() {
+  $('#app-error').textContent = '';
+  $('#refresh').disabled = true;
+  try { render(await api('balances')); }
+  catch (e) { if (e.message !== 'Not signed in') $('#app-error').textContent = e.message; }
+  finally { $('#refresh').disabled = false; }
+}
+$('#refresh').addEventListener('click', load);
+
+async function disconnect(inst) {
+  if (!confirm('Disconnect ' + inst.name + '?')) return;
+  try { await api('disconnect', { id: inst.id }); await load(); }
+  catch (e) { $('#app-error').textContent = e.message; }
+}
+
+/* ---------- Plaid Link ---------- */
+function openLink(token, returningFromBank) {
+  const handler = Plaid.create({
+    token,
+    receivedRedirectUri: returningFromBank ? window.location.href : undefined,
+    onSuccess: async (public_token, meta) => {
+      localStorage.removeItem('plaid_link_token');
+      try {
+        await api('exchange-token', { public_token, institution_name: meta.institution && meta.institution.name });
+        await load();
+      } catch (e) { $('#app-error').textContent = e.message; }
+    },
+    onExit: (err) => { if (err) $('#app-error').textContent = err.display_message || 'Bank connection was cancelled.'; },
+  });
+  handler.open();
+}
+
+$('#connect').addEventListener('click', async () => {
+  $('#app-error').textContent = '';
+  try {
+    const { link_token } = await api('create-link-token', {});
+    localStorage.setItem('plaid_link_token', link_token);
+    openLink(link_token, false);
+  } catch (e) { $('#app-error').textContent = e.message; }
+});
+
+/* ---------- Start ---------- */
+async function start() {
+  showApp();
+  await load();
+  // Some banks (OAuth) send you back to this page; reopen Link to finish.
+  if (window.location.href.includes('oauth_state_id=')) {
+    const token = localStorage.getItem('plaid_link_token');
+    if (token) openLink(token, true);
+    history.replaceState({}, '', window.location.pathname);
+  }
+}
+
+(async () => {
+  try {
+    const s = await api('session');
+    if (s.authed) await start(); else showLogin();
+  } catch (e) { showLogin(); }
+})();
+</script>
+</body>
+</html>

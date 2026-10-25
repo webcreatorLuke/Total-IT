@@ -1,0 +1,10 @@
+{
+  "name": "combined-balance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Invite-only dashboard that combines balances from linked bank accounts using Plaid",
+  "engines": { "node": "20.x" },
+  "dependencies": {
+    "plaid": "^30.0.0"
+  }
+}
